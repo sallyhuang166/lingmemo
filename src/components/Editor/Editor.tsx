@@ -7,6 +7,7 @@ export function NoteEditor() {
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contentRef = useRef(content);
   const currentNoteIdRef = useRef<string | null>(null);
@@ -20,6 +21,53 @@ export function NoteEditor() {
   } = useNoteStore();
 
   const currentNote = notes.find((n) => n.id === currentNoteId);
+
+  // Simple Markdown to HTML converter
+  const parseMarkdown = (text: string): string => {
+    if (!text) return '';
+
+    let html = text
+      // Escape HTML
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      // Bold: **text** or __text__
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+      // Italic: *text* or _text_
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/_([^_]+)_/g, '<em>$1</em>')
+      // Strikethrough: ~~text~~
+      .replace(/~~([^~]+)~~/g, '<del>$1</del>')
+      // Headers
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      // Unordered list
+      .replace(/^- \[ \] (.+)$/gm, '<div class="task-item"><input type="checkbox" disabled> $1</div>')
+      .replace(/^- \[x\] (.+)$/gm, '<div class="task-item"><input type="checkbox" checked disabled> $1</div>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      // Ordered list
+      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+      // Blockquote
+      .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
+      // Inline code
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      // Links
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+      // Code blocks
+      .replace(/```[\s\S]*?```/g, (match) => {
+        const code = match.replace(/```\w*\n?/g, '').trim();
+        return `<pre><code>${code}</code></pre>`;
+      })
+      // Line breaks
+      .replace(/\n/g, '<br>');
+
+    // Wrap consecutive li items in ul
+    html = html.replace(/(<li>.*<\/li>)(<br>)?/g, '$1');
+
+    return html;
+  };
 
   // Keep refs in sync
   useEffect(() => {
@@ -220,6 +268,18 @@ export function NoteEditor() {
             ) : null}
           </span>
 
+          {/* Toggle Preview */}
+          <button
+            onClick={() => setShowPreview(!showPreview)}
+            className={`px-3 py-1 text-xs rounded flex items-center gap-1 ${
+              showPreview
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+            }`}
+          >
+            {showPreview ? '编辑' : '预览'}
+          </button>
+
           {/* Save Button */}
           <button
             className={`px-3 py-1 text-xs rounded flex items-center gap-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 ${
@@ -264,20 +324,22 @@ export function NoteEditor() {
       </div>
 
       {/* Format Toolbar */}
-      <div className="flex items-center gap-1 px-4 py-1 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-        {formatButtons.map((btn, index) => (
-          <button
-            key={index}
-            onClick={btn.action}
-            title={btn.title}
-            className={`px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${
-              btn.className || ''
-            }`}
-          >
-            {btn.label}
-          </button>
-        ))}
-      </div>
+      {!showPreview && (
+        <div className="flex items-center gap-1 px-4 py-1 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+          {formatButtons.map((btn, index) => (
+            <button
+              key={index}
+              onClick={btn.action}
+              title={btn.title}
+              className={`px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${
+                btn.className || ''
+              }`}
+            >
+              {btn.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* AI Summary */}
       {currentNote.aiSummary && (
@@ -291,15 +353,22 @@ export function NoteEditor() {
         </div>
       )}
 
-      {/* Editor */}
+      {/* Editor / Preview */}
       <div className="flex-1 overflow-hidden">
-        <textarea
-          ref={textareaRef}
-          value={content}
-          onChange={handleContentChange}
-          className="w-full h-full p-4 bg-transparent border-none outline-none resize-none font-mono text-sm"
-          placeholder="开始编写笔记... (支持 Markdown 语法)"
-        />
+        {showPreview ? (
+          <div
+            className="w-full h-full p-4 overflow-auto prose prose-sm max-w-none dark:prose-invert"
+            dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
+          />
+        ) : (
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={handleContentChange}
+            className="w-full h-full p-4 bg-transparent border-none outline-none resize-none font-mono text-sm"
+            placeholder="开始编写笔记... (支持 Markdown 语法)"
+          />
+        )}
       </div>
     </div>
   );
