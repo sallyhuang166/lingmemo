@@ -8,7 +8,7 @@ export interface Folder {
 
 export interface Note {
   id: string;
-  folderId: string;
+  folderId: string | null;
   title: string;
   content: string;
   isDeleted: boolean;

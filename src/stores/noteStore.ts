@@ -150,28 +150,34 @@ export const useNoteStore = create<NoteStore>((set, get) => ({
   },
 
   deleteFolder: async (id) => {
-    const { useLocal, folders } = get();
+    const { useLocal, folders, currentFolderId } = get();
+
+    // Get all folder IDs to delete (including children)
+    const getChildIds = (parentId: string): string[] => {
+      const children = folders.filter(f => f.parentId === parentId);
+      return children.flatMap(c => [c.id, ...getChildIds(c.id)]);
+    };
+    const allIds = [id, ...getChildIds(id)];
 
     if (useLocal) {
       await folderOperations.delete(id);
-      const getChildIds = (parentId: string): string[] => {
-        const children = folders.filter(f => f.parentId === parentId);
-        return children.flatMap(c => [c.id, ...getChildIds(c.id)]);
-      };
-      const allIds = [id, ...getChildIds(id)];
       set(state => ({
         folders: state.folders.filter(f => !allIds.includes(f.id)),
         notes: state.notes.map(n =>
-          allIds.includes(n.folderId) ? { ...n, folderId: '' } : n
+          allIds.includes(n.folderId || '') ? { ...n, folderId: '' } : n
         ),
+        currentFolderId: allIds.includes(currentFolderId || '') ? null : currentFolderId,
       }));
     } else {
       await folderApi.delete(id);
-      // Refresh data
-      const { folders: newFolders } = get();
-      set({
-        folders: newFolders.filter(f => f.id !== id && f.parentId !== id),
-      });
+      // Remove folder and children from local state
+      set(state => ({
+        folders: state.folders.filter(f => !allIds.includes(f.id)),
+        notes: state.notes.map(n =>
+          allIds.includes(n.folderId || '') ? { ...n, folderId: null } : n
+        ),
+        currentFolderId: allIds.includes(currentFolderId || '') ? null : currentFolderId,
+      }));
     }
   },
 
@@ -306,11 +312,20 @@ export const useNoteStore = create<NoteStore>((set, get) => ({
   // Search
   setSearchQuery: (query) => {
     set({ searchQuery: query });
-    if (query) {
-      get().search(query);
-    } else {
-      set({ searchResults: [] });
+
+    // Debounce search
+    if ((get() as any).searchTimeout) {
+      clearTimeout((get() as any).searchTimeout);
     }
+
+    if (!query) {
+      set({ searchResults: [] });
+      return;
+    }
+
+    (get() as any).searchTimeout = setTimeout(() => {
+      get().search(query);
+    }, 300);
   },
 
   search: async (query) => {

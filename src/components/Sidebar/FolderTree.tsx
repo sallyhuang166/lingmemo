@@ -131,6 +131,16 @@ export function FolderItem({ folder, level, childFolders }: FolderItemProps) {
           <div className="absolute right-2 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg py-1 z-50 min-w-[120px]">
             <button
               className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+              onClick={() => {
+                setIsEditing(true);
+                setEditName(folder.name);
+                setShowContextMenu(false);
+              }}
+            >
+              重命名
+            </button>
+            <button
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
               onClick={handleNewFolder}
             >
               新建子文件夹

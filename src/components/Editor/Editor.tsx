@@ -10,6 +10,7 @@ export function NoteEditor() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contentRef = useRef(content);
   const currentNoteIdRef = useRef<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const {
     notes,
@@ -66,7 +67,6 @@ export function NoteEditor() {
   useEffect(() => {
     if (!currentNoteId || !currentNote) return;
 
-    // Only save if content actually changed
     if (content !== currentNote.content) {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
@@ -101,6 +101,59 @@ export function NoteEditor() {
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
   };
+
+  // Insert Markdown syntax
+  const insertMarkdown = (before: string, after: string = '') => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = content.substring(start, end);
+
+    const newText = content.substring(0, start) + before + selectedText + after + content.substring(end);
+    setContent(newText);
+
+    // Restore cursor position
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + before.length, start + before.length + selectedText.length);
+    }, 0);
+  };
+
+  // Format buttons
+  const formatButtons = [
+    { label: 'B', title: '加粗 (Ctrl+B)', action: () => insertMarkdown('**', '**'), className: 'font-bold' },
+    { label: 'I', title: '斜体 (Ctrl+I)', action: () => insertMarkdown('*', '*'), className: 'italic' },
+    { label: 'S', title: '删除线', action: () => insertMarkdown('~~', '~~'), className: 'line-through' },
+    { label: 'H1', title: '标题1', action: () => insertMarkdown('# ') },
+    { label: 'H2', title: '标题2', action: () => insertMarkdown('## ') },
+    { label: 'H3', title: '标题3', action: () => insertMarkdown('### ') },
+    { label: '•', title: '无序列表', action: () => insertMarkdown('- ') },
+    { label: '1.', title: '有序列表', action: () => insertMarkdown('1. ') },
+    { label: '☐', title: '待办事项', action: () => insertMarkdown('- [ ] ') },
+    { label: '"', title: '引用', action: () => insertMarkdown('> ') },
+    { label: '<>', title: '代码', action: () => insertMarkdown('`', '`') },
+    { label: '🔗', title: '链接', action: () => insertMarkdown('[', '](url)') },
+  ];
+
+  // Keyboard shortcuts for formatting
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        if (e.key === 'b') {
+          e.preventDefault();
+          insertMarkdown('**', '**');
+        } else if (e.key === 'i') {
+          e.preventDefault();
+          insertMarkdown('*', '*');
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [content]);
 
   // Generate AI Summary
   const handleGenerateSummary = useCallback(async () => {
@@ -210,6 +263,22 @@ export function NoteEditor() {
         </div>
       </div>
 
+      {/* Format Toolbar */}
+      <div className="flex items-center gap-1 px-4 py-1 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+        {formatButtons.map((btn, index) => (
+          <button
+            key={index}
+            onClick={btn.action}
+            title={btn.title}
+            className={`px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${
+              btn.className || ''
+            }`}
+          >
+            {btn.label}
+          </button>
+        ))}
+      </div>
+
       {/* AI Summary */}
       {currentNote.aiSummary && (
         <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800">
@@ -225,6 +294,7 @@ export function NoteEditor() {
       {/* Editor */}
       <div className="flex-1 overflow-hidden">
         <textarea
+          ref={textareaRef}
           value={content}
           onChange={handleContentChange}
           className="w-full h-full p-4 bg-transparent border-none outline-none resize-none font-mono text-sm"
